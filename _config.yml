@@ -1,1 +1,5 @@
-theme: jekyll-theme-minimal
+remote_theme: just-the-docs/just-the-docs
+markdown: kramdown
+title: SHEPHERD
+color_scheme: light
+footer_content: "Copyright &copy; 2024 ryan@freestatelabs"
