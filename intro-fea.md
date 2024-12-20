@@ -1,5 +1,5 @@
 ---
-layout: defaul 
+layout: default
 title: Intro to FEA 
 nav_order: 5
 ---
