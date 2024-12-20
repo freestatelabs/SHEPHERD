@@ -1,4 +1,0 @@
-""" SHEPHERD
-    Finite Element Methods
-"""
-

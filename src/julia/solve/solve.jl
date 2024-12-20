@@ -1,3 +1,0 @@
-""" SHEPHERD
-    Sparse Matrix Solvers
-"""
