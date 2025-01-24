@@ -30,3 +30,4 @@
 *.exe
 *.out
 *.app
+src/julia/elem/3d/stiffnessMatrix_brick.m
