@@ -26,7 +26,7 @@ function Dmat(mat::LinearElastic, dim::Dim)
 
 end
 
-function Dmat(mat::LinearElastic, dim::Dim)
+function Dmat(mat::LinearElastic, dim=Dim2D)
 
     if dim == Dim2D
         return (mat.E/(1-mat.nu^2)) * [1 mat.nu 0; mat.nu 1 0; 0 0 (1-mat.nu)/2]
