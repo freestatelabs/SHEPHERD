@@ -1,11 +1,17 @@
 using BenchmarkTools, LinearAlgebra, LoopVectorization
 
+const gauss_pts = [-1/sqrt(3), 1/sqrt(3)]
+
 const dShape111 = [ -0.311004   0.311004    0.0833334  -0.0833334  -0.0833334   0.0833334  0.0223291  -0.0223291;
                     -0.31108   -0.0832575   0.0832575   0.31108     0.0833537  -0.0223088  0.0223088   0.0833537;
                     -0.31108   -0.0832575  -0.0223088  -0.0833537   0.31108     0.0832575  0.0223088   0.0833537]
 
+
+
 function inv3x3!(Ainv::AbstractArray, A::AbstractArray) 
     # Roughly 27x faster than `inv()` with no allocations
+    # Could probably be even faster if repeated calculations were re-used, but 
+    # we're optimizing nanoseconds here
 
     Ainv[1,1] = (A[2,2]*A[3,3] - A[2,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
     Ainv[1,2] = (-A[1,2]*A[3,3] + A[1,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
@@ -18,6 +24,7 @@ function inv3x3!(Ainv::AbstractArray, A::AbstractArray)
     Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
 
 end
+
 
 function det3x3(A::AbstractArray)
     # Roughly 30x faster than `det()` with no allocations 
@@ -122,20 +129,10 @@ finite elemen
 K = int(int(int(B' * C * B * |J| dr ds dt)))
 """
 function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
-                    _K::AbstractArray, dShape::AbstractArray, J::AbstractArray, 
+                    _K::AbstractArray, dShape::AbstractArray, J::AbstractArray, Jinv::AbstractArray,
                     B::AbstractArray, aux::AbstractArray, BtC::AbstractArray, Bt::AbstractArray)
 
-    # Calculate shape functions 
-    gauss_pts = [-0.57735026, 0.57735026]
-
     K .= 0.0
-    _K .= 0.0
-    # B .= 0.0 
-    # J .= 0.0 
-    # dShape .= 0.0
-    aux .= 0.0 
-    # BtC .= 0.0
-    Jinv = zeros(3,3)
 
     for xi1 in gauss_pts 
         for xi2 in gauss_pts
@@ -153,14 +150,14 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 mul!(aux, Jinv, dShape)
 
                 # First 3 rows are normal strain 
-                @turbo for i = 1:3 
+                for i = 1:3 
                     for j = 0:7 
                         B[i,3*j+1+(i-1)] = aux[i,j+1]
                     end
                 end
 
                 # Next 3 rows are shear strains
-                @turbo for j = 0:7 
+                for j = 0:7 
                     B[4,3*j+1] = aux[2,j+1]
                     B[4,3*j+2] = aux[1,j+1]
                     B[5,3*j+3] = aux[2,j+1]
@@ -170,59 +167,16 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 end
 
                 # K += B' * C * B * det(J)
-                Bt .= B'            # Bt is 24x6
+                Bt .= B'       
                 mul!(BtC, Bt, C)
                 mul!(_K, BtC, B)
-                K .+= _K.*det3x3(J)
+                K .+= _K .* det3x3(J)
             
             end
         end
     end
 end
 
-nodes = [
-    0 0 0;
-    1 0 0; 
-    1 1 0; 
-    0 1 0;
-    0 0 1; 
-    1 0 1;
-    1 1 1;
-    0 1 1
-]
-E = 200e3
-constraints = [1, 2, 3, 10, 12, 13, 14, 22]
-# constraints = [1,2,3,10,11,12,13,14,15,22,23,24]
-dx = 1
-
-F = 0.25*(E*dx) .* [0,0,0,1,0,0,1,0,0,0,0,0,0,0,0,1,0,0,1,0,0,0,0,0]
-
-nodes = convert.(Float64, nodes)
-C = Cmatrix(E, 0.3)
-K = zeros(24,24)
-dShape = zeros(3,8)
-J = zeros(3,3)
-B = zeros(6,24) 
-Bt = zeros(24,6)
-aux = zeros(3,8)
-BtC = zeros(24,6)
-_K = zeros(24,24)
-
-
-t = Temp()
-
-K_C3D8!(K, nodes, C, _K, dShape, J, B, aux, BtC, Bt)
-
-for constraint in constraints
-    K[constraint,:] .= 0.0 
-    K[:,constraint] .= 0.0 
-end 
-
-q = qr(K, Val(true)) \ F 
-display(q)
-
-# display(K)
-@btime K_C3D8!($K, $nodes, $C, $_K, $dShape, $J, $B, $aux, $BtC, $Bt)
 
 
 # Test different shape function derivative methods
