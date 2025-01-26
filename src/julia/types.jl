@@ -1,14 +1,26 @@
 
 
+mutable struct Cloads 
+    dofs::AbstractArray{Int64}
+    forces::AbstractArray{Float64}
+
+    function Cloads()
+        new()
+    end
+
+    function Cloads(dofs::Vector{<:Integer}, forces::Vector{<:AbstractFloat})
+        new(dofs, forces)
+    end
+end
+
 mutable struct Model 
-    nodes::Matrix{Float32}
-    dofs::Matrix{Int32}
-    elements::Matrix{Int32}
-    Nsets::Dict 
-    materials::Dict 
-    boundaries::Dict 
+    nodes::AbstractArray{Float64}
+    dofs::AbstractArray{Int64}
+    elements::AbstractArray{Int64}
+    cloads::Cloads
     
     function Model()
         new()
     end
 end
+

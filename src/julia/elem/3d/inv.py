@@ -1,3 +1,6 @@
+""" Use sympy to print out the code for [A]^-1, where [A] is dim(3,3)
+"""
+
 from sympy import symbols
 from sympy.matrices import Matrix
 

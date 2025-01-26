@@ -5,10 +5,10 @@
 module Shepherd 
 
 include("types.jl")
-include("utils/utils.jl")
-include("mat/mat.jl")
+include("utils.jl")
+include("materials.jl")
 include("elem/elem.jl")
-include("fem/fem.jl")
-include("solve/solve.jl")
+include("assemble.jl")
+include("solve.jl")
 
 end # module

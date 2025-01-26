@@ -6,23 +6,22 @@ const dShape111 = [ -0.311004   0.311004    0.0833334  -0.0833334  -0.0833334   
                     -0.31108   -0.0832575   0.0832575   0.31108     0.0833537  -0.0223088  0.0223088   0.0833537;
                     -0.31108   -0.0832575  -0.0223088  -0.0833537   0.31108     0.0832575  0.0223088   0.0833537]
 
-
-
 function inv3x3!(Ainv::AbstractArray, A::AbstractArray) 
-    # Roughly 27x faster than `inv()` with no allocations
-    # Could probably be even faster if repeated calculations were re-used, but 
-    # we're optimizing nanoseconds here
+    # Roughly 45x faster than `inv()` with no allocations
 
-    Ainv[1,1] = (A[2,2]*A[3,3] - A[2,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[1,2] = (-A[1,2]*A[3,3] + A[1,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[1,3] = (A[1,2]*A[2,3] - A[1,3]*A[2,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,1] = (-A[2,1]*A[3,3] + A[2,3]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,2] = (A[1,1]*A[3,3] - A[1,3]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,3] = (-A[1,1]*A[2,3] + A[1,3]*A[2,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,1] = (A[2,1]*A[3,2] - A[2,2]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,2] = (-A[1,1]*A[3,2] + A[1,2]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
+    detA = det3x3(A)
 
+    Ainv[1,1] = (A[2,2]*A[3,3] - A[2,3]*A[3,2])/detA
+    Ainv[1,2] = (-A[1,2]*A[3,3] + A[1,3]*A[3,2])/detA
+    Ainv[1,3] = (A[1,2]*A[2,3] - A[1,3]*A[2,2])/detA
+    Ainv[2,1] = (-A[2,1]*A[3,3] + A[2,3]*A[3,1])/detA
+    Ainv[2,2] = (A[1,1]*A[3,3] - A[1,3]*A[3,1])/detA
+    Ainv[2,3] = (-A[1,1]*A[2,3] + A[1,3]*A[2,1])/detA
+    Ainv[3,1] = (A[2,1]*A[3,2] - A[2,2]*A[3,1])/detA
+    Ainv[3,2] = (-A[1,1]*A[3,2] + A[1,2]*A[3,1])/detA
+    Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/detA
+
+    return detA
 end
 
 
@@ -133,6 +132,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                     B::AbstractArray, aux::AbstractArray, BtC::AbstractArray, Bt::AbstractArray)
 
     K .= 0.0
+    detJ = 0.0
 
     for xi1 in gauss_pts 
         for xi2 in gauss_pts
@@ -146,7 +146,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 update_dShape!(dShape, xi1, xi2, xi3)
 
                 mul!(J, dShape, nodes)
-                inv3x3!(Jinv, J)
+                detJ = inv3x3!(Jinv, J)
                 mul!(aux, Jinv, dShape)
 
                 # First 3 rows are normal strain 
@@ -170,7 +170,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 Bt .= B'       
                 mul!(BtC, Bt, C)
                 mul!(_K, BtC, B)
-                K .+= _K .* det3x3(J)
+                K .+= _K .* detJ
             
             end
         end

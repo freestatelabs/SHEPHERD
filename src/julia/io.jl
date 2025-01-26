@@ -1,6 +1,4 @@
 
-fn = "/Users/ryan/Github/SHEPHERD/test/linear-2k.inp"
-include("types.jl")
 
 using Printf
 
@@ -13,8 +11,10 @@ function scaninputfile(fn::AbstractString)
 
     readingnodes = false 
     readingelems = false 
+    readingcloads = false
     Nnodes = 0 
     Nelems = 0
+    Ncloads = 0
     lines =readlines(fn)
 
     for i in eachindex(lines)
@@ -36,6 +36,14 @@ function scaninputfile(fn::AbstractString)
             readingelems = false 
         end 
 
+        if (length(lines[i]) == 6) && (lines[i][1:6] == "*Cload")
+            readingcloads = true 
+            continue
+        end 
+        if (readingcloads) && (lines[i][1] == '*')
+            readingcloads = false 
+        end 
+
         # Count nodes 
         if readingnodes 
             Nnodes += 1 
@@ -46,9 +54,13 @@ function scaninputfile(fn::AbstractString)
             Nelems += 1
         end
 
+        # Count Cloads 
+        if readingcloads 
+            Ncloads += 1
+        end
     end
 
-    return Nnodes, Nelems
+    return Nnodes, Nelems, Ncloads
 end
 
 """
@@ -60,6 +72,7 @@ Currently supports only the following keywords:
     *Node 
     *Element
     *Material
+    *Cload
 # Returns 
 (Dict, Dict, Dict) corresponding to nodes, elems, dofs
 
@@ -71,17 +84,19 @@ function readinputfile(fn::AbstractString; verbose = false)
         @printf "Reading file: '%s'.\n" fn
     end
 
-    Nnodes, Nelems = scaninputfile(fn)
+    Nnodes, Nelems, Ncloads = scaninputfile(fn)
+    @printf "Nnodes: %i, Nelems: %i, Ncloads: %i\n" Nnodes Nelems Ncloads
     #Nnodes = 2025 
     #Nelems = 1280
+    #Ncloads = 25
     Ndofs = 3*Nnodes
 
-    nodes = Matrix{Float32}(undef, Nnodes, 6)   # x, y, z, dof1, dof2, dof3     
-    dofs= Matrix{Int32}(undef, Ndofs,2)  # node, direction
-    elements = Matrix{Int32}(undef, Nelems, 8)       # Only supports C3D8
-    dofs[1,:] = [1,1]
+    nodes = zeros(Float64, Nnodes, 3)           # x, y, z, dof1, dof2, dof3     
+    dofs = zeros(Int64, Nnodes, 3)              # dof1, dof2, dof3
+    elements = zeros(Int64, Nelems, 8)          # Only supports C3D8
+    cload_dofs = zeros(Int64, Ncloads)
+    cload_forces = zeros(Float64, Ncloads)
 
-    model = Model()
     n = 1
 
     lines = readlines(fn) 
@@ -101,11 +116,9 @@ function readinputfile(fn::AbstractString; verbose = false)
         # 
         if (length(lines[i]) == 5) && (lines[i][1:5] == "*Node")
             for j in 1:Nnodes
-                nodes[j,1:3] = parse.(Float32, split(lines[i+j], ", "))[2:end]
-                dofs[d,:] = [j,1]
-                dofs[d+1,:] = [j,2]
-                dofs[d+2,:] = [j,3] 
-                d+= 3
+                nodes[j,1:3] = parse.(Float64, split(lines[i+j], ", "))[2:end]
+                dofs[j,:] = [d, d+1, d+2]
+                d += 3
             end
             i += Nnodes
         end
@@ -116,7 +129,21 @@ function readinputfile(fn::AbstractString; verbose = false)
         if (length(lines[i]) > 8) && lines[i][1:8] == "*Element"
             for j in 1:Nelems
                 # Read an element from the file 
-                elements[j,:] = parse.(Int32, [x for x in split(lines[i+j], ", ")])[2:end] 
+                elements[j,:] = parse.(Int64, [x for x in split(lines[i+j], ", ")])[2:end] 
+            end
+            i += Nelems
+        end 
+
+        # Read Cload
+        if (length(lines[i]) == 6) && lines[i][1:6] == "*Cload"
+            for j in 1:Ncloads
+                # Read a load from the file 
+                line = parse.(Float64, [x for x in split(lines[i+j], ", ")])
+                node = convert(Int64, line[1]) 
+                k = convert(Int64, line[2]) 
+                # f = line[3]
+                cload_dofs[j] = (node - 1)*3 + k 
+                cload_forces[j] = line[3]
             end
             i += Nelems
         end 
@@ -124,15 +151,14 @@ function readinputfile(fn::AbstractString; verbose = false)
         i += 1
     end
 
-    model.nodes = nodes 
-    model.elements = elements 
-    model.dofs = dofs
-    return model
+    return nodes, dofs, elements, cload_dofs, cload_forces
 end
 
-model = readinputfile(fn);
-println()
 
-# It's pretty slow, lots of allocs
-using BenchmarkTools
-@btime readinputfile($fn)
+# fn = "/Users/ryan/Github/SHEPHERD/test/linear-2k.inp"
+# model = readinputfile(fn);
+# println()
+
+# # It's pretty slow, lots of allocs
+# using BenchmarkTools
+# @btime readinputfile($fn)
