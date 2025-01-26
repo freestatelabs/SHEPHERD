@@ -1,20 +1,23 @@
 """
 """
 
+using SparseArrays
 
-using SparseArrays, BenchmarkTools
-cd(@__DIR__)
-include("types.jl")
-include("elem/3d/C3D8.jl")
-include("io.jl")
 
-function assemble(nodes, dofs, elements)
+"""
+    assemble(nodes::AbstractArray{AbstractFloat}, dofs::AbstractArray{Integer}, 
+                    elements::AbstractArray{Integer}, E::Number, nu::Number)
+
+Assemble the global stiffness matrix for a linear-elastic finite-element mesh.
+"""
+function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:Integer}, 
+                    elements::AbstractArray{<:Integer}, E::Number, nu::Number)
 
     Nnodes = size(nodes)[1]
     Nelems = size(elements)[1]
     Ndof = 3*Nnodes
     K = zeros(Ndof, Ndof)
-    C = Cmatrix(200e3, 0.3)
+    C = Cmatrix(E, nu)
 
     # Initialize values for stiffness matrix 
     Ke = zeros(24,24)
@@ -53,7 +56,14 @@ function assemble(nodes, dofs, elements)
 end
 
 
-function applybcs!(K, nodes)
+
+"""
+    applyfixedbcs!(K, nodes)
+
+    Apply fixed boundary conditions to a global stiffness matrix by
+    zeroing out the rows and columns of each fixed DOF.
+"""
+function applyfixedbcs!(K, nodes)
 
     dofs = zeros(Int64, 3*length(nodes))
 
@@ -67,29 +77,3 @@ function applybcs!(K, nodes)
     end
 
 end
-
-# Test 
-
-# nodes = convert.(Float64, [
-#     0 0 0;
-#     1 0 0; 
-#     1 1 0; 
-#     0 1 0;
-#     0 0 1; 
-#     1 0 1;
-#     1 1 1;
-#     0 1 1
-# ])
-
-# nodes = hcat(nodes, [1 2 3; 4 5 6; 7 8 9; 10 11 12; 13 14 15; 16 17 18; 19 20 21; 22 23 24])
-# elements = [1 2 3 4 5 6 7 8]
-# model = Model() 
-# model.nodes = nodes 
-# model.elements = elements 
-# K = assemble(model)
-
-# fn = "../../test/linear-2k.inp"
-# fn = "../../test/single-elem.inp"
-# nodes, dofs, elements = readinputfile(fn)
-# # # K = assemble(model)
-# K = assemble(nodes, dofs, elements)

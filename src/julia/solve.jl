@@ -3,14 +3,69 @@
     Solve a finite element problem
 """
 
-fn = "../../test/linear-2k.inp"
-cd(@__DIR__)
-include("elem/3d/C3D8.jl")
-include("io.jl")
-include("assemble.jl")
 
-# using Pardiso
-using Printf
+using Printf, Pardiso
+
+
+"""
+    solve(fn::AbstractString)
+
+Solve a finite element problem by loading a Calculix input file.
+"""
+function solve(fn::AbstractString; fixed_nodes=[], constraints=[], verbose=false)
+    
+    # Read the input file, load data structures
+    # Needs to support *NODE, *ELEMENT, *MATERIAL, *Cload
+
+    if verbose @printf "\nReading input file from '%s' \n" fn end
+
+    tstart = time()
+    nodes, dofs, elements, cload_dofs, cload_forces, E, nu = readinputfile(fn)
+    @printf "File read elapsed time:       %.3f s\n" time() - tstart
+
+    # Assemble the stiffness matrix 
+    t1 = time()
+    K = assemble(nodes, dofs, elements, E ,nu)
+    @printf "Matrix assembly elapsed time: %.3f s\n" time() - t1
+
+    # Apply boundary conditions 
+    # fixed_nodes = [3, 4, 6, 8, 91, 92, 93, 255, 256, 257, 340, 341, 342, 346, 347, 348, 
+    #                 1297, 1298, 1299, 1300, 1301, 1302, 1303, 1304, 1305]
+    t1 = time()
+    if length(fixed_nodes) > 0
+        applyfixedbcs!(K, fixed_nodes)
+    end 
+
+    if length(constraints) > 0 
+        for constraint in constraints
+            K[constraint,:] .= 0.0 
+            K[:,constraint] .= 0.0 
+        end 
+    end
+
+    @printf "BC elapsed time:              %.3f s\n" time() - t1
+
+
+    # Define loads 
+    f = zeros(length(dofs))
+    for i in eachindex(cload_dofs)
+        f[cload_dofs[i]] = cload_forces[i]
+    end
+
+    # Send to solver 
+
+    t1 = time()
+    q = qr(Matrix(K), Val(true)) \ f
+    @printf "Solver elapsed time:          %.3f s\n" time() - t1
+    
+    ps = MKLPardisoSolver()
+    solve!(ps, q, K, f)
+
+    @printf "Total SHEPHERD time:          %.3f s\n" time() - tstart
+    return K, f, q
+end
+
+
 
 """
     conjugate_gradient!(A, b, x)
@@ -25,7 +80,7 @@ function conjugate_gradient!(
     # Initialize search direction vector
     search_direction = copy(residual)
     # Compute initial squared residual norm
-	norm(x) = sqrt(sum(x.^2))
+    norm(x) = sqrt(sum(x.^2))
     old_resid_norm = norm(residual)
 
     it = 0
@@ -51,59 +106,3 @@ function conjugate_gradient!(
     @printf "Iterations: %i. residual: %.3e\n\n" it old_resid_norm
     return x
 end
-
-function solve(fn)
-    
-    # Read the input file, load data structures
-    # Needs to support *NODE, *ELEMENT, *MATERIAL, *Cload
-
-    @printf "Reading input file from '%s' \n" fn
-    tstart = time()
-    nodes, dofs, elements, cload_dofs, cload_forces = readinputfile(fn)
-    @printf "File read elapsed time:       %.3f s\n" time() - tstart
-    # Assemble the stiffness matrix 
-    t1 = time()
-    K = assemble(nodes, dofs, elements)
-    @printf "Matrix assembly elapsed time: %.3f s\n" time() - t1
-
-    # Apply boundary conditions 
-    fixed_nodes = [3, 4, 6, 8, 91, 92, 93, 255, 256, 257, 340, 341, 342, 346, 347, 348, 
-                    1297, 1298, 1299, 1300, 1301, 1302, 1303, 1304, 1305]
-    # fixed_nodes = [1, 4, 5, 7]
-    t1 = time()
-    applybcs!(K, fixed_nodes)
-    @printf "BC elapsed time:              %.3f s\n" time() - t1
-
-    # constraints = [1, 2, 3, 10, 12, 13, 14, 22] 
-    # for constraint in constraints
-    #     K[constraint,:] .= 0.0 
-    #     K[:,constraint] .= 0.0 
-    # end 
-
-    # Define loads 
-    f = zeros(length(dofs))
-    for i in eachindex(cload_dofs)
-        f[cload_dofs[i]] = cload_forces[i]
-    end
-
-    # Send to solver 
-
-    t1 = time()
-    q = qr(Matrix(K), Val(true)) \ f
-    @printf "Solver elapsed time:          %.3f s\n" time() - t1
-    
-    # ps = MKLPardisoSolver()
-    # solve!(ps, q, K, f)
-
-    # Calculate stress 
-
-    # Report stress at locations of interest
-    @printf "Total SHEPHERD time:          %.3f s\n" time() - tstart
-    return K, f, q
-end
-
-# fn = "../../test/single-elem.inp"
-fn = "../../test/linear-2k.inp"
-@time begin 
-    K, f, q = solve(fn);
-end;

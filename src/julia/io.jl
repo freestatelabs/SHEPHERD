@@ -71,10 +71,10 @@ Reads a Calculix input file.
 Currently supports only the following keywords: 
     *Node 
     *Element
-    *Material
+    *Elastic
     *Cload
 # Returns 
-(Dict, Dict, Dict) corresponding to nodes, elems, dofs
+
 
 143ms
 """
@@ -85,7 +85,7 @@ function readinputfile(fn::AbstractString; verbose = false)
     end
 
     Nnodes, Nelems, Ncloads = scaninputfile(fn)
-    @printf "Nnodes: %i, Nelems: %i, Ncloads: %i\n" Nnodes Nelems Ncloads
+    @printf "\tNnodes: %i, Nelems: %i, Ncloads: %i\n" Nnodes Nelems Ncloads
     #Nnodes = 2025 
     #Nelems = 1280
     #Ncloads = 25
@@ -103,6 +103,9 @@ function readinputfile(fn::AbstractString; verbose = false)
     imax = length(lines)
     i = 1   # line number 
     d = 1
+    E = 0.0
+    nu = 0.0 
+
     while i <= imax
 
         # Comment line (saves time if we just skip to the next loop)
@@ -145,13 +148,20 @@ function readinputfile(fn::AbstractString; verbose = false)
                 cload_dofs[j] = (node - 1)*3 + k 
                 cload_forces[j] = line[3]
             end
-            i += Nelems
+            i += Ncloads
         end 
+
+        if (length(lines[i]) == 8) && (lines[i] == "*Elastic")
+            i += 1
+            line = parse.(Float64, [x for x in split(lines[i], ", ")])
+            E = line[1]
+            nu = line[2] 
+        end
 
         i += 1
     end
 
-    return nodes, dofs, elements, cload_dofs, cload_forces
+    return nodes, dofs, elements, cload_dofs, cload_forces, E, nu
 end
 
 

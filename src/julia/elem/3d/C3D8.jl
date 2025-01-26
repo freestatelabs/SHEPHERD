@@ -1,4 +1,4 @@
-using BenchmarkTools, LinearAlgebra, LoopVectorization
+using LinearAlgebra
 
 const gauss_pts = [-1/sqrt(3), 1/sqrt(3)]
 
@@ -6,6 +6,11 @@ const dShape111 = [ -0.311004   0.311004    0.0833334  -0.0833334  -0.0833334   
                     -0.31108   -0.0832575   0.0832575   0.31108     0.0833537  -0.0223088  0.0223088   0.0833537;
                     -0.31108   -0.0832575  -0.0223088  -0.0833537   0.31108     0.0832575  0.0223088   0.0833537]
 
+"""
+    inv3x3!(Ainv::AbstractArray, A::AbstractArray)
+
+Compute the inverse of a 3x3 matrix; store in `Ainv`.
+"""
 function inv3x3!(Ainv::AbstractArray, A::AbstractArray) 
     # Roughly 45x faster than `inv()` with no allocations
 
@@ -25,28 +30,17 @@ function inv3x3!(Ainv::AbstractArray, A::AbstractArray)
 end
 
 
+"""
+    det3x3(A::AbstractArray)
+
+Compute the determinant of a 3x3 matrix.
+"""
 function det3x3(A::AbstractArray)
     # Roughly 30x faster than `det()` with no allocations 
 
     return A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1]
 end
 
-"""
-    Cmatrix(E::AbstractFloat, nu::AbstractFloat)
-
-Calculate the 6x6 constitutive matrix for a linear elastic material
-"""
-function Cmatrix(E::AbstractFloat, nu::AbstractFloat)
-
-    a = E / ((1 + nu) * (1 - 2nu))
-
-    C = zeros(6,6)
-    C[1,1] = C[2,2] = C[3,3] = 1-nu 
-    C[4,4] = C[5,5] = C[6,6] = 0.5*(1-2nu)
-    C[1,2] = C[1,3] = C[2,3] = C[2,1] = C[3,1] = C[3,2] = nu
-
-    return a .* C
-end
 
 function update_dShape!(dShape, xi1, xi2, xi3) 
 # dShape .= (1/8) .*[
@@ -189,6 +183,3 @@ end
 # xi2 = 1 
 # xi3 = 1 
 # @btime update_dShape2!($dShape, $xi1, $xi2, $xi3)
-
-
-# Test matrix inverse
