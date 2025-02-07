@@ -12,7 +12,7 @@ using Printf, Pardiso
 
 Solve a finite element problem by loading a Calculix input file.
 """
-function solve(fn::AbstractString; fixed_nodes=[], constraints=[], verbose=false)
+function solve(fn::AbstractString; solver="CG", fixed_nodes=[], constraints=[], verbose=false)
     
     # Read the input file, load data structures
     # Needs to support *NODE, *ELEMENT, *MATERIAL, *Cload
@@ -23,46 +23,47 @@ function solve(fn::AbstractString; fixed_nodes=[], constraints=[], verbose=false
     nodes, dofs, elements, cload_dofs, cload_forces, E, nu = readinputfile(fn)
     @printf "File read elapsed time:       %.3f s\n" time() - tstart
 
+    # Reduce the dofs and create nodal force vector
+    reduced_dofs, f = reducedofs(dofs, constraints, cload_dofs, cload_forces)
+
     # Assemble the stiffness matrix 
     t1 = time()
-    K = assemble(nodes, dofs, elements, E ,nu)
+    K = assemble(nodes, dofs, elements, reduced_dofs, E ,nu)
     @printf "Matrix assembly elapsed time: %.3f s\n" time() - t1
 
     # Apply boundary conditions 
     # fixed_nodes = [3, 4, 6, 8, 91, 92, 93, 255, 256, 257, 340, 341, 342, 346, 347, 348, 
     #                 1297, 1298, 1299, 1300, 1301, 1302, 1303, 1304, 1305]
     t1 = time()
+    Kr = copy(K)
     if length(fixed_nodes) > 0
-        applyfixedbcs!(K, fixed_nodes)
+        applyfixedbcs!(Kr, fixed_nodes)
     end 
 
     if length(constraints) > 0 
         for constraint in constraints
-            K[constraint,:] .= 0.0 
-            K[:,constraint] .= 0.0 
+            Kr[constraint,:] .= 0.0 
+            Kr[:,constraint] .= 0.0 
         end 
     end
 
     @printf "BC elapsed time:              %.3f s\n" time() - t1
 
-
-    # Define loads 
-    f = zeros(length(dofs))
-    for i in eachindex(cload_dofs)
-        f[cload_dofs[i]] = cload_forces[i]
-    end
-
     # Send to solver 
 
     t1 = time()
-    q = qr(Matrix(K), Val(true)) \ f
+    q = zeros(size(f))
+    if solver == "CG"
+        conjugate_gradient!(Matrix(Kr), f, q)
+    elseif solver == "pardiso"
+        solve!(MKLPardisoSolver(), q, K, f)
+    else 
+        q = qr(Matrix(Kr), Val(true)) \ f
+    end
     @printf "Solver elapsed time:          %.3f s\n" time() - t1
-    
-    ps = MKLPardisoSolver()
-    solve!(ps, q, K, f)
 
     @printf "Total SHEPHERD time:          %.3f s\n" time() - tstart
-    return K, f, q
+    return K, Kr, f, q
 end
 
 
@@ -101,6 +102,8 @@ function conjugate_gradient!(
         # Update squared residual norm for next iteration
         old_resid_norm = new_resid_norm
         it += 1
+
+        @printf "Iteration: %i, max residual: %.3e\n" it old_resid_norm
     end
 
     @printf "Iterations: %i. residual: %.3e\n\n" it old_resid_norm

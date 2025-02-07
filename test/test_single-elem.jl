@@ -1,7 +1,10 @@
-
+cd(@__DIR__)
 include("../src/julia/shepherd.jl")
 
-fn = "two_elems.inp"
+fn = "two-elem.inp"
 constraints = [1, 2, 3, 10, 12, 13, 14, 22] 
+fixed_nodes = [1,4,5,8]
 
-K, f, q = solve(fn; constraints=constraints)
+K, Kr, f, q = solve(fn; constraints=constraints)
+
+qr(Matrix(Kr), Val(true))\f

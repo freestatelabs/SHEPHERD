@@ -4,6 +4,34 @@
 using SparseArrays
 
 
+function reducedofs(dofs::AbstractArray{<:Integer}, constrained_dofs::AbstractArray{<:Integer}, 
+                    cload_dofs, cload_forces)
+
+    Ndofs = length(dofs)
+    Nconstrained = length(constrained_dofs)
+    Nreduced = Ndofs - Nconstrained
+    reduced_dofs = zeros(Int64, Nreduced)
+    f = zeros(Float64, Nreduced)
+    i = 1 
+
+        # Define loads 
+        f = zeros(length(dofs))
+        for i in eachindex(cload_dofs)
+            f[cload_dofs[i]] = cload_forces[i]
+        end
+
+    for j in 1:Ndofs 
+        if !(dofs[j] in constrained_dofs) 
+            reduced_dofs[i] = dofs[j] 
+            f[i] = cload_forces[cload_dofs[]]
+            i += 1 
+        end 
+    end 
+
+    return reduced_dofs
+end
+
+
 """
     assemble(nodes::AbstractArray{AbstractFloat}, dofs::AbstractArray{Integer}, 
                     elements::AbstractArray{Integer}, E::Number, nu::Number)
@@ -11,7 +39,8 @@ using SparseArrays
 Assemble the global stiffness matrix for a linear-elastic finite-element mesh.
 """
 function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:Integer}, 
-                    elements::AbstractArray{<:Integer}, E::Number, nu::Number)
+                    elements::AbstractArray{<:Integer}, dof_index::AbstractArray{<:Integer}, 
+                    E::Number, nu::Number)
 
     Nnodes = size(nodes)[1]
     Nelems = size(elements)[1]
@@ -76,4 +105,5 @@ function applyfixedbcs!(K, nodes)
         K[:,dof] .= 0.0 
     end
 
+    return dofs
 end
