@@ -45,11 +45,11 @@ function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:I
     Nnodes = size(nodes)[1]
     Nelems = size(elements)[1]
     Ndof = 3*Nnodes
-    K = zeros(Ndof, Ndof)
+    Kglobal = zeros(Ndof, Ndof)
     C = Cmatrix(E, nu)
 
     # Initialize values for stiffness matrix 
-    Ke = zeros(24,24)
+    Kelement = zeros(24,24)
     dShape = zeros(3,8)
     J = zeros(3,3)
     B = zeros(6,24) 
@@ -71,17 +71,19 @@ function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:I
             edofs[3*(i-1)+1:3*(i-1)+3] .= dofs[elements[e,i],:]
         end
 
-        K_C3D8!(Ke, enodes, C, _Ke, dShape, J, Jinv, B, aux, BtC, Bt)
+        # Compute stiffness matrix for that element and store in `Kelement`
+        K_C3D8!(Kelement, enodes, C, _Ke, dShape, J, Jinv, B, aux, BtC, Bt)
 
+        # Add to the global stiffness matrix
         for i in 1:24
             for j in 1:24
-                K[edofs[i],edofs[j]] += Ke[i,j] 
+                Kglobal[edofs[i],edofs[j]] += Ke[i,j] 
             end
         end
 
     end
 
-    return sparse(K)
+    return sparse(Kglobal)
 end
 
 

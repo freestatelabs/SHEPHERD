@@ -89,79 +89,74 @@ function readinputfile(fn::AbstractString; verbose = false)
     #Nnodes = 2025 
     #Nelems = 1280
     #Ncloads = 25
-    Ndofs = 3*Nnodes
 
-    nodes = zeros(Float64, Nnodes, 3)           # x, y, z, dof1, dof2, dof3     
-    dofs = zeros(Int64, Nnodes, 3)              # dof1, dof2, dof3
-    elements = zeros(Int64, Nelems, 8)          # Only supports C3D8
-    cload_dofs = zeros(Int64, Ncloads)
-    cload_forces = zeros(Float64, Ncloads)
+    nodes = zeros(FLOAT_PRECISION, Nnodes, 3)           # x, y, z, dof1, dof2, dof3     
+    elements = zeros(INT_PRECISION, Nelems, 8)          # Only supports C3D8
+    material = [0.0, 0.0]
+    fixed_nodes = [0]
+    forces = Forces(Ncloads)
 
-    n = 1
-
-    lines = readlines(fn) 
-    imax = length(lines)
-    i = 1   # line number 
-    d = 1
     E = 0.0
     nu = 0.0 
 
-    while i <= imax
+    lines = readlines(fn) 
+    linenumber = 1  
+
+    while linenumber <= length(lines)
 
         # Comment line (saves time if we just skip to the next loop)
-        if lines[i][1:2] == "**"
-            i += 1
+        if lines[linenumber][1:2] == "**"
+            linenumber += 1
             continue 
         end
              
         # 
         # Read nodes
         # 
-        if (length(lines[i]) == 5) && (lines[i][1:5] == "*Node")
+        if (length(lines[linenumber]) == 5) && (lines[linenumber][1:5] == "*Node")
             for j in 1:Nnodes
-                nodes[j,1:3] = parse.(Float64, split(lines[i+j], ", "))[2:end]
-                dofs[j,:] = [d, d+1, d+2]
-                d += 3
+                nodes[j,1:3] = parse.(FLOAT_PRECISION, split(lines[linenumber+j], ", "))[2:end]
             end
-            i += Nnodes
+            linenumber += Nnodes
         end
 
         #
         # Read elem 
         #
-        if (length(lines[i]) > 8) && lines[i][1:8] == "*Element"
+        if (length(lines[linenumber]) > 8) && lines[linenumber][1:8] == "*Element"
             for j in 1:Nelems
                 # Read an element from the file 
-                elements[j,:] = parse.(Int64, [x for x in split(lines[i+j], ", ")])[2:end] 
+                elements[j,:] = parse.(INT_PRECISION, [x for x in split(lines[linenumber+j], ", ")])[2:end] 
             end
-            i += Nelems
+            linenumber += Nelems
         end 
 
         # Read Cload
-        if (length(lines[i]) == 6) && lines[i][1:6] == "*Cload"
+        if (length(lines[linenumber]) == 6) && lines[linenumber][1:6] == "*Cload"
             for j in 1:Ncloads
                 # Read a load from the file 
-                line = parse.(Float64, [x for x in split(lines[i+j], ", ")])
-                node = convert(Int64, line[1]) 
-                k = convert(Int64, line[2]) 
-                # f = line[3]
-                cload_dofs[j] = (node - 1)*3 + k 
-                cload_forces[j] = line[3]
+                line = parse.(FLOAT_PRECISION, [x for x in split(lines[linenumber+j], ", ")])
+
+                forces.nodes[j] = convert(INT_PRECISION, line[1]) 
+                forces.directions[j] = convert(INT_PRECISION, line[2]) 
+                forces.magnitudes[j] = convert(FLOAT_PRECISION, line[3])
             end
-            i += Ncloads
+            linenumber += Ncloads
         end 
 
-        if (length(lines[i]) == 8) && (lines[i] == "*Elastic")
-            i += 1
-            line = parse.(Float64, [x for x in split(lines[i], ", ")])
+        if (length(lines[linenumber]) == 8) && (lines[linenumber] == "*Elastic")
+            linenumber += 1
+            line = parse.(FLOAT_PRECISION, [x for x in split(lines[linenumber], ", ")])
             E = line[1]
             nu = line[2] 
         end
 
-        i += 1
+        linenumber += 1
     end
 
-    return nodes, dofs, elements, cload_dofs, cload_forces, E, nu
+
+
+    return Model(nodes, elements, material, fixed_nodes, forces)
 end
 
 

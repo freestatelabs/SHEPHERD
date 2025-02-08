@@ -6,7 +6,7 @@ using Printf
 precision = 32
 
 
-struct Model{T_int, T_float}
+mutable struct Model{T_int, T_float}
 
     # Nnodes x 3: x,y,z coordinates of nodes
     nodes::Matrix{T_float}
@@ -23,9 +23,11 @@ struct Model{T_int, T_float}
     # N_forces: (node, direction, value)        
     forces::Vector{Tuple{T_int, T_int, T_float}}
 
-    # # Free DOFs: Nfree x 3: [dof #, node #, direction]
-    # free_dofs::Matrix{T_int}
+    # Free DOFs: Nfree x 3: [dof #, node #, direction]
+    free_dofs::Matrix{T_int}
 
+    # Fixed DOFs: Nfixed x 3: [dof #, node #, direction]
+    fixed_dofs::Matrix{T_int}
 
     function Model(nodes, elements, material, fixed_nodes, forces, free_dofs)
 
