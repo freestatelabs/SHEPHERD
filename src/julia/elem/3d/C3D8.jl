@@ -7,6 +7,16 @@ const dShape111 = [ -0.311004   0.311004    0.0833334  -0.0833334  -0.0833334   
                     -0.31108   -0.0832575  -0.0223088  -0.0833537   0.31108     0.0832575  0.0223088   0.0833537]
 
 """
+    det3x3(A::AbstractArray)
+
+Compute the determinant of a 3x3 matrix.
+Roughly 30x faster than `det()` with no allocations 
+"""
+function det3x3(A::AbstractArray)
+    return A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1]
+end
+
+"""
     inv3x3!(Ainv::AbstractArray, A::AbstractArray)
 
 Compute the inverse of a 3x3 matrix; store in `Ainv`.
@@ -27,18 +37,6 @@ function inv3x3!(Ainv::AbstractArray, A::AbstractArray)
     Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/detA
 
     return detA
-end
-
-
-"""
-    det3x3(A::AbstractArray)
-
-Compute the determinant of a 3x3 matrix.
-"""
-function det3x3(A::AbstractArray)
-    # Roughly 30x faster than `det()` with no allocations 
-
-    return A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1]
 end
 
 
@@ -114,10 +112,12 @@ end
 
 
 """
-    K_C3D8(nodes::AbstractArray, C::AbstractArray)
+    K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
+            _K::AbstractArray, dShape::AbstractArray, J::AbstractArray, Jinv::AbstractArray,
+            B::AbstractArray, aux::AbstractArray, BtC::AbstractArray, Bt::AbstractArray)
 
 Calculate the 24x24 stiffness matrix for a 8-node isoparametric hexahedral 
-finite elemen
+finite element, store in `K`.
 
 K = int(int(int(B' * C * B * |J| dr ds dt)))
 """

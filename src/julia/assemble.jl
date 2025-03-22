@@ -4,31 +4,62 @@
 using SparseArrays
 
 
-function reducedofs(dofs::AbstractArray{<:Integer}, constrained_dofs::AbstractArray{<:Integer}, 
-                    cload_dofs, cload_forces)
+function assigndofs(model::Model)
 
-    Ndofs = length(dofs)
-    Nconstrained = length(constrained_dofs)
-    Nreduced = Ndofs - Nconstrained
-    reduced_dofs = zeros(Int64, Nreduced)
-    f = zeros(Float64, Nreduced)
-    i = 1 
+    Ndofs = 3*size(model.nodes)[1]
+    constrained_dofs = zeros(INT_PRECISION, 3*length(model.fixed_nodes))
+    free_dofs = zeros(INT_PRECISION, Ndofs - length(constrained_dofs))
+    i = 1
 
-        # Define loads 
-        f = zeros(length(dofs))
-        for i in eachindex(cload_dofs)
-            f[cload_dofs[i]] = cload_forces[i]
+    for node in model.fixed_nodes 
+        for dir in 1:3 
+            constrained_dofs[i] = 3*(node - 1) + dir
+            i += 1
         end
+    end
 
-    for j in 1:Ndofs 
-        if !(dofs[j] in constrained_dofs) 
-            reduced_dofs[i] = dofs[j] 
-            f[i] = cload_forces[cload_dofs[]]
-            i += 1 
+    i = 1
+    for j in 1:Ndofs
+        if !(j in constrained_dofs) 
+            free_dofs[i] = j
+            i += 1
         end 
     end 
 
-    return reduced_dofs
+    return constrained_dofs, free_dofs
+end
+
+
+function assignforcedofs(model::Model)
+
+    loaded_dofs = zeros(INT_PRECISION, length(model.forces.nodes))
+
+    for i in eachindex(model.forces.nodes)
+        loaded_dofs[i] = 3*(model.forces.nodes[i] - 1) + model.forces.directions[i]
+    end
+
+    return loaded_dofs
+end
+
+
+function reducesystem(model, K, free_dofs, force_dofs)
+    println(free_dofs)
+
+    Nfree = length(free_dofs) 
+    Kr = zeros(FLOAT_PRECISION, Nfree, Nfree)
+    F = zeros(FLOAT_PRECISION, Nfree) 
+
+    for i in 1:Nfree 
+        for j in 1:Nfree 
+            Kr[i,j] = K[free_dofs[i],free_dofs[j]]
+        end
+    end
+
+    for i in eachindex(force_dofs)
+        F[i] = model.forces.magnitudes[i]
+    end
+
+    return Kr, F
 end
 
 
@@ -39,8 +70,7 @@ end
 Assemble the global stiffness matrix for a linear-elastic finite-element mesh.
 """
 function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:Integer}, 
-                    elements::AbstractArray{<:Integer}, dof_index::AbstractArray{<:Integer}, 
-                    E::Number, nu::Number)
+                    elements::AbstractArray{<:Integer}, E::Number, nu::Number)
 
     Nnodes = size(nodes)[1]
     Nelems = size(elements)[1]
@@ -77,35 +107,11 @@ function assemble(nodes::AbstractArray{<:AbstractFloat}, dofs::AbstractArray{<:I
         # Add to the global stiffness matrix
         for i in 1:24
             for j in 1:24
-                Kglobal[edofs[i],edofs[j]] += Ke[i,j] 
+                Kglobal[edofs[i],edofs[j]] += _Ke[i,j] 
             end
         end
 
     end
 
     return sparse(Kglobal)
-end
-
-
-
-"""
-    applyfixedbcs!(K, nodes)
-
-    Apply fixed boundary conditions to a global stiffness matrix by
-    zeroing out the rows and columns of each fixed DOF.
-"""
-function applyfixedbcs!(K, nodes)
-
-    dofs = zeros(Int64, 3*length(nodes))
-
-    for i in eachindex(nodes)
-        dofs[(i-1)*3+1:(i-1)*3+3] .= [1,2,3] .+ 3*(nodes[i] - 1)
-    end
-
-    for dof in dofs 
-        K[dof,:] .= 0.0 
-        K[:,dof] .= 0.0 
-    end
-
-    return dofs
 end

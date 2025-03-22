@@ -16,54 +16,57 @@ function solve(fn::AbstractString; solver="CG", fixed_nodes=[], constraints=[], 
     
     # Read the input file, load data structures
     # Needs to support *NODE, *ELEMENT, *MATERIAL, *Cload
-
     if verbose @printf "\nReading input file from '%s' \n" fn end
-
     tstart = time()
-    nodes, dofs, elements, cload_dofs, cload_forces, E, nu = readinputfile(fn)
+    model = readinputfile(fn)
     @printf "File read elapsed time:       %.3f s\n" time() - tstart
 
-    # Reduce the dofs and create nodal force vector
-    reduced_dofs, f = reducedofs(dofs, constraints, cload_dofs, cload_forces)
+    # Find constrained, free, and loaded dofs
+    model.fixed_nodes = fixed_nodes
+    constrained_dofs, free_dofs = assigndofs(model)
+    force_dofs = assignforcedofs(model)
 
-    # Assemble the stiffness matrix 
+    # Assemble the global stiffness matrix 
     t1 = time()
-    K = assemble(nodes, dofs, elements, reduced_dofs, E ,nu)
+    dofs = [x for x in 1:3*length(model.nodes)]
+    K = assemble(model.nodes, dofs, model.elements, model.material[1], model.material[2])
     @printf "Matrix assembly elapsed time: %.3f s\n" time() - t1
 
     # Apply boundary conditions 
     # fixed_nodes = [3, 4, 6, 8, 91, 92, 93, 255, 256, 257, 340, 341, 342, 346, 347, 348, 
     #                 1297, 1298, 1299, 1300, 1301, 1302, 1303, 1304, 1305]
     t1 = time()
-    Kr = copy(K)
-    if length(fixed_nodes) > 0
-        applyfixedbcs!(Kr, fixed_nodes)
-    end 
+    # Kr = copy(K)
+    # if length(fixed_nodes) > 0
+    #     applyfixedbcs!(Kr, fixed_nodes)
+    # end 
 
-    if length(constraints) > 0 
-        for constraint in constraints
-            Kr[constraint,:] .= 0.0 
-            Kr[:,constraint] .= 0.0 
-        end 
-    end
+    # if length(constraints) > 0 
+    #     for constraint in constraints
+    #         Kr[constraint,:] .= 0.0 
+    #         Kr[:,constraint] .= 0.0 
+    #     end 
+    # end
+
+    Kr, F = reducesystem(model, K, free_dofs, force_dofs)
 
     @printf "BC elapsed time:              %.3f s\n" time() - t1
 
     # Send to solver 
 
     t1 = time()
-    q = zeros(size(f))
+    q = zeros(size(F))
     if solver == "CG"
-        conjugate_gradient!(Matrix(Kr), f, q)
+        conjugate_gradient!(Matrix(Kr), F, q)
     elseif solver == "pardiso"
-        solve!(MKLPardisoSolver(), q, K, f)
+        solve!(MKLPardisoSolver(), q, sparse(Kr), F)
     else 
-        q = qr(Matrix(Kr), Val(true)) \ f
+        q = qr(Matrix(Kr), Val(true)) \ F
     end
     @printf "Solver elapsed time:          %.3f s\n" time() - t1
 
     @printf "Total SHEPHERD time:          %.3f s\n" time() - tstart
-    return K, Kr, f, q
+    return K, Kr, F, q
 end
 
 

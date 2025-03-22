@@ -5,7 +5,10 @@ using Printf
 """ 
     scaninputfile(fn::AbstractString)
 
-    Scans an input file to determine metadata
+    Scans an input file to determine metadata.
+
+Returns: 
+    Nnodes, Nelems, Ncloads
 """
 function scaninputfile(fn::AbstractString)
 
@@ -64,7 +67,7 @@ function scaninputfile(fn::AbstractString)
 end
 
 """
-    readinputfile(fn::AbstractString)
+    readinputfile(fn::AbstractString; verbose=false)
 
 Reads a Calculix input file. 
 
@@ -74,11 +77,9 @@ Currently supports only the following keywords:
     *Elastic
     *Cload
 # Returns 
-
-
-143ms
+    `Model
 """
-function readinputfile(fn::AbstractString; verbose = false)
+function readinputfile(fn::AbstractString; verbose=false)
 
     if verbose
         @printf "Reading file: '%s'.\n" fn
