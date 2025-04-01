@@ -1,20 +1,31 @@
-""" SHEPHERD
 
-    Solve a finite element problem
+"""
+Solution Process 
+
+Receive K, f in: 
+    K*x = f 
+
+Solve for x: 
+
+    1. compute LDL decomposition of K: 
+        K = L*D*L' 
+    2. Solve for y, use forward-substitution:
+        L*y = f 
+    3. Solve for x, use back-substitution: 
+        D*L' * x = y 
+
 """
 
-# Read the input file, load data structures
-# Needs to support *NODE, *ELEMENT, *MATERIAL, *Cload
+include("ldl.jl")
+include("substitutions.jl")
 
-# Assemble the stiffness matrix 
+function solve_direct(K::AbstractArray, f::AbstractArray) 
 
-# Apply boundary conditions 
+    L, D = LDL_decomposition(K) 
+    DLt = D*transpose(L)
 
-# Define loads 
+    y = forward_substitution(L, f) 
+    x = back_substiution(DLt, y)
 
-# Send to solver 
-
-# Calculate stress 
-
-# Report stress at locations of interest
-
+    return x
+end

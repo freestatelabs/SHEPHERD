@@ -136,3 +136,30 @@ println()
 # It's pretty slow, lots of allocs
 using BenchmarkTools
 @btime readinputfile($fn)
+
+
+"""
+    loadinputfile(fn::String)
+
+    Load a Calculix-formatted input file into memory.
+"""
+function loadinputfile(fn::String)
+
+    model = Model()
+
+    lines = readlines(fn)
+    Nlines = length(lines)
+
+    line_number = 1 
+
+    while line_number <= Nlines 
+
+        if length(lines[line_number]) >= 5 && lines[line_number] == "*Node" 
+            
+        end
+
+        line_number += 1 
+    end
+
+end
+
