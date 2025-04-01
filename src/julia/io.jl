@@ -1,20 +1,23 @@
 
-fn = "/Users/ryan/Github/SHEPHERD/test/linear-2k.inp"
-include("types.jl")
 
 using Printf
 
 """ 
     scaninputfile(fn::AbstractString)
 
-    Scans an input file to determine metadata
+    Scans an input file to determine metadata.
+
+Returns: 
+    Nnodes, Nelems, Ncloads
 """
 function scaninputfile(fn::AbstractString)
 
     readingnodes = false 
     readingelems = false 
+    readingcloads = false
     Nnodes = 0 
     Nelems = 0
+    Ncloads = 0
     lines =readlines(fn)
 
     for i in eachindex(lines)
@@ -36,6 +39,14 @@ function scaninputfile(fn::AbstractString)
             readingelems = false 
         end 
 
+        if (length(lines[i]) == 6) && (lines[i][1:6] == "*Cload")
+            readingcloads = true 
+            continue
+        end 
+        if (readingcloads) && (lines[i][1] == '*')
+            readingcloads = false 
+        end 
+
         # Count nodes 
         if readingnodes 
             Nnodes += 1 
@@ -46,93 +57,114 @@ function scaninputfile(fn::AbstractString)
             Nelems += 1
         end
 
+        # Count Cloads 
+        if readingcloads 
+            Ncloads += 1
+        end
     end
 
-    return Nnodes, Nelems
+    return Nnodes, Nelems, Ncloads
 end
 
 """
-    readinputfile(fn::AbstractString)
+    readinputfile(fn::AbstractString; verbose=false)
 
 Reads a Calculix input file. 
 
 Currently supports only the following keywords: 
     *Node 
     *Element
-    *Material
+    *Elastic
+    *Cload
 # Returns 
-(Dict, Dict, Dict) corresponding to nodes, elems, dofs
-
-143ms
+    `Model
 """
-function readinputfile(fn::AbstractString; verbose = false)
+function readinputfile(fn::AbstractString; verbose=false)
 
     if verbose
         @printf "Reading file: '%s'.\n" fn
     end
 
-    Nnodes, Nelems = scaninputfile(fn)
+    Nnodes, Nelems, Ncloads = scaninputfile(fn)
+    @printf "\tNnodes: %i, Nelems: %i, Ncloads: %i\n" Nnodes Nelems Ncloads
     #Nnodes = 2025 
     #Nelems = 1280
-    Ndofs = 3*Nnodes
+    #Ncloads = 25
 
-    nodes = Matrix{Float32}(undef, Nnodes, 6)   # x, y, z, dof1, dof2, dof3     
-    dofs= Matrix{Int32}(undef, Ndofs,2)  # node, direction
-    elements = Matrix{Int32}(undef, Nelems, 8)       # Only supports C3D8
-    dofs[1,:] = [1,1]
+    nodes = zeros(FLOAT_PRECISION, Nnodes, 3)           # x, y, z, dof1, dof2, dof3     
+    elements = zeros(INT_PRECISION, Nelems, 8)          # Only supports C3D8
+    material = [0.0, 0.0]
+    fixed_nodes = [0]
+    forces = Forces(Ncloads)
 
-    model = Model()
-    n = 1
+    E = 0.0
+    nu = 0.0 
 
     lines = readlines(fn) 
-    imax = length(lines)
-    i = 1   # line number 
-    d = 1
-    while i <= imax
+    linenumber = 1  
+
+    while linenumber <= length(lines)
 
         # Comment line (saves time if we just skip to the next loop)
-        if lines[i][1:2] == "**"
-            i += 1
+        if lines[linenumber][1:2] == "**"
+            linenumber += 1
             continue 
         end
              
         # 
         # Read nodes
         # 
-        if (length(lines[i]) == 5) && (lines[i][1:5] == "*Node")
+        if (length(lines[linenumber]) == 5) && (lines[linenumber][1:5] == "*Node")
             for j in 1:Nnodes
-                nodes[j,1:3] = parse.(Float32, split(lines[i+j], ", "))[2:end]
-                dofs[d,:] = [j,1]
-                dofs[d+1,:] = [j,2]
-                dofs[d+2,:] = [j,3] 
-                d+= 3
+                nodes[j,1:3] = parse.(FLOAT_PRECISION, split(lines[linenumber+j], ", "))[2:end]
             end
-            i += Nnodes
+            linenumber += Nnodes
         end
 
         #
         # Read elem 
         #
-        if (length(lines[i]) > 8) && lines[i][1:8] == "*Element"
+        if (length(lines[linenumber]) > 8) && lines[linenumber][1:8] == "*Element"
             for j in 1:Nelems
                 # Read an element from the file 
-                elements[j,:] = parse.(Int32, [x for x in split(lines[i+j], ", ")])[2:end] 
+                elements[j,:] = parse.(INT_PRECISION, [x for x in split(lines[linenumber+j], ", ")])[2:end] 
             end
-            i += Nelems
+            linenumber += Nelems
         end 
 
-        i += 1
+        # Read Cload
+        if (length(lines[linenumber]) == 6) && lines[linenumber][1:6] == "*Cload"
+            for j in 1:Ncloads
+                # Read a load from the file 
+                line = parse.(FLOAT_PRECISION, [x for x in split(lines[linenumber+j], ", ")])
+
+                forces.nodes[j] = convert(INT_PRECISION, line[1]) 
+                forces.directions[j] = convert(INT_PRECISION, line[2]) 
+                forces.magnitudes[j] = convert(FLOAT_PRECISION, line[3])
+            end
+            linenumber += Ncloads
+        end 
+
+        if (length(lines[linenumber]) == 8) && (lines[linenumber] == "*Elastic")
+            linenumber += 1
+            line = parse.(FLOAT_PRECISION, [x for x in split(lines[linenumber], ", ")])
+            E = line[1]
+            nu = line[2] 
+        end
+
+        linenumber += 1
     end
 
-    model.nodes = nodes 
-    model.elements = elements 
-    model.dofs = dofs
-    return model
+
+
+    return Model(nodes, elements, material, fixed_nodes, forces)
 end
 
-model = readinputfile(fn);
-println()
 
-# It's pretty slow, lots of allocs
-using BenchmarkTools
-@btime readinputfile($fn)
+# fn = "/Users/ryan/Github/SHEPHERD/test/linear-2k.inp"
+# model = readinputfile(fn);
+# println()
+
+# # It's pretty slow, lots of allocs
+# using BenchmarkTools
+# @btime readinputfile($fn)

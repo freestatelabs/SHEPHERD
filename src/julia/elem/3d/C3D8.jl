@@ -1,4 +1,4 @@
-using BenchmarkTools, LinearAlgebra, LoopVectorization
+using LinearAlgebra
 
 const gauss_pts = [-1/sqrt(3), 1/sqrt(3)]
 
@@ -6,48 +6,39 @@ const dShape111 = [ -0.311004   0.311004    0.0833334  -0.0833334  -0.0833334   
                     -0.31108   -0.0832575   0.0832575   0.31108     0.0833537  -0.0223088  0.0223088   0.0833537;
                     -0.31108   -0.0832575  -0.0223088  -0.0833537   0.31108     0.0832575  0.0223088   0.0833537]
 
+"""
+    det3x3(A::AbstractArray)
 
-
-function inv3x3!(Ainv::AbstractArray, A::AbstractArray) 
-    # Roughly 27x faster than `inv()` with no allocations
-    # Could probably be even faster if repeated calculations were re-used, but 
-    # we're optimizing nanoseconds here
-
-    Ainv[1,1] = (A[2,2]*A[3,3] - A[2,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[1,2] = (-A[1,2]*A[3,3] + A[1,3]*A[3,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[1,3] = (A[1,2]*A[2,3] - A[1,3]*A[2,2])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,1] = (-A[2,1]*A[3,3] + A[2,3]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,2] = (A[1,1]*A[3,3] - A[1,3]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[2,3] = (-A[1,1]*A[2,3] + A[1,3]*A[2,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,1] = (A[2,1]*A[3,2] - A[2,2]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,2] = (-A[1,1]*A[3,2] + A[1,2]*A[3,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-    Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/(A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1])
-
-end
-
-
+Compute the determinant of a 3x3 matrix.
+Roughly 30x faster than `det()` with no allocations 
+"""
 function det3x3(A::AbstractArray)
-    # Roughly 30x faster than `det()` with no allocations 
-
     return A[1,1]*A[2,2]*A[3,3] - A[1,1]*A[2,3]*A[3,2] - A[1,2]*A[2,1]*A[3,3] + A[1,2]*A[2,3]*A[3,1] + A[1,3]*A[2,1]*A[3,2] - A[1,3]*A[2,2]*A[3,1]
 end
 
 """
-    Cmatrix(E::AbstractFloat, nu::AbstractFloat)
+    inv3x3!(Ainv::AbstractArray, A::AbstractArray)
 
-Calculate the 6x6 constitutive matrix for a linear elastic material
+Compute the inverse of a 3x3 matrix; store in `Ainv`.
 """
-function Cmatrix(E::AbstractFloat, nu::AbstractFloat)
+function inv3x3!(Ainv::AbstractArray, A::AbstractArray) 
+    # Roughly 45x faster than `inv()` with no allocations
 
-    a = E / ((1 + nu) * (1 - 2nu))
+    detA = det3x3(A)
 
-    C = zeros(6,6)
-    C[1,1] = C[2,2] = C[3,3] = 1-nu 
-    C[4,4] = C[5,5] = C[6,6] = 0.5*(1-2nu)
-    C[1,2] = C[1,3] = C[2,3] = C[2,1] = C[3,1] = C[3,2] = nu
+    Ainv[1,1] = (A[2,2]*A[3,3] - A[2,3]*A[3,2])/detA
+    Ainv[1,2] = (-A[1,2]*A[3,3] + A[1,3]*A[3,2])/detA
+    Ainv[1,3] = (A[1,2]*A[2,3] - A[1,3]*A[2,2])/detA
+    Ainv[2,1] = (-A[2,1]*A[3,3] + A[2,3]*A[3,1])/detA
+    Ainv[2,2] = (A[1,1]*A[3,3] - A[1,3]*A[3,1])/detA
+    Ainv[2,3] = (-A[1,1]*A[2,3] + A[1,3]*A[2,1])/detA
+    Ainv[3,1] = (A[2,1]*A[3,2] - A[2,2]*A[3,1])/detA
+    Ainv[3,2] = (-A[1,1]*A[3,2] + A[1,2]*A[3,1])/detA
+    Ainv[3,3] = (A[1,1]*A[2,2] - A[1,2]*A[2,1])/detA
 
-    return a .* C
+    return detA
 end
+
 
 function update_dShape!(dShape, xi1, xi2, xi3) 
 # dShape .= (1/8) .*[
@@ -121,10 +112,12 @@ end
 
 
 """
-    K_C3D8(nodes::AbstractArray, C::AbstractArray)
+    K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
+            _K::AbstractArray, dShape::AbstractArray, J::AbstractArray, Jinv::AbstractArray,
+            B::AbstractArray, aux::AbstractArray, BtC::AbstractArray, Bt::AbstractArray)
 
 Calculate the 24x24 stiffness matrix for a 8-node isoparametric hexahedral 
-finite elemen
+finite element, store in `K`.
 
 K = int(int(int(B' * C * B * |J| dr ds dt)))
 """
@@ -133,6 +126,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                     B::AbstractArray, aux::AbstractArray, BtC::AbstractArray, Bt::AbstractArray)
 
     K .= 0.0
+    detJ = 0.0
 
     for xi1 in gauss_pts 
         for xi2 in gauss_pts
@@ -146,7 +140,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 update_dShape!(dShape, xi1, xi2, xi3)
 
                 mul!(J, dShape, nodes)
-                inv3x3!(Jinv, J)
+                detJ = inv3x3!(Jinv, J)
                 mul!(aux, Jinv, dShape)
 
                 # First 3 rows are normal strain 
@@ -170,7 +164,7 @@ function K_C3D8!(K::AbstractArray, nodes::AbstractArray, C::AbstractArray,
                 Bt .= B'       
                 mul!(BtC, Bt, C)
                 mul!(_K, BtC, B)
-                K .+= _K .* det3x3(J)
+                K .+= _K .* detJ
             
             end
         end
@@ -189,6 +183,3 @@ end
 # xi2 = 1 
 # xi3 = 1 
 # @btime update_dShape2!($dShape, $xi1, $xi2, $xi3)
-
-
-# Test matrix inverse
